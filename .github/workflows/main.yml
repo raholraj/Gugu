@@ -1,0 +1,207 @@
+name: Build APK from ZIP
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Extract ZIP
+        run: |
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -1)
+          echo "Found ZIP: $ZIP_FILE"
+          unzip -o "$ZIP_FILE" -d extracted/
+          ls extracted/
+
+      - name: Setup project structure
+        run: |
+          # Find the app folder inside extracted
+          APP_DIR=$(find extracted -name "app" -type d | head -1)
+          PROJECT_ROOT=$(dirname "$APP_DIR")
+          echo "Project root: $PROJECT_ROOT"
+          echo "PROJECT_ROOT=$PROJECT_ROOT" >> $GITHUB_ENV
+
+          # Create settings.gradle.kts
+          cat > "$PROJECT_ROOT/settings.gradle.kts" << 'EOF'
+          pluginManagement {
+            repositories {
+              google()
+              mavenCentral()
+              gradlePluginPortal()
+            }
+          }
+          dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+              google()
+              mavenCentral()
+            }
+          }
+          rootProject.name = "SmartVideoCutter"
+          include(":app")
+          EOF
+
+          # Create root build.gradle.kts
+          cat > "$PROJECT_ROOT/build.gradle.kts" << 'EOF'
+          plugins {
+            alias(libs.plugins.android.application) apply false
+            alias(libs.plugins.kotlin.compose) apply false
+            alias(libs.plugins.google.devtools.ksp) apply false
+            alias(libs.plugins.roborazzi) apply false
+            alias(libs.plugins.secrets) apply false
+            alias(libs.plugins.google.services) apply false
+          }
+          EOF
+
+          # Create libs.versions.toml
+          mkdir -p "$PROJECT_ROOT/gradle"
+          cat > "$PROJECT_ROOT/gradle/libs.versions.toml" << 'EOF'
+          [versions]
+          agp = "8.5.2"
+          kotlin = "2.0.21"
+          ksp = "2.0.21-1.0.27"
+          compose-bom = "2024.10.01"
+          firebase-bom = "33.6.0"
+          room = "2.6.1"
+          lifecycle = "2.8.7"
+          navigation = "2.8.4"
+          media3 = "1.4.1"
+          coil = "2.7.0"
+          coroutines = "1.9.0"
+          work = "2.10.0"
+          okhttp = "4.12.0"
+          retrofit = "2.11.0"
+          moshi = "1.15.1"
+          roborazzi = "1.26.0"
+          robolectric = "4.13"
+          secrets = "2.0.1"
+          appcompat = "1.7.0"
+          core-ktx = "1.15.0"
+
+          [libraries]
+          androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.9.3" }
+          androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
+          androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+          androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+          androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+          androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+          androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+          androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+          androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+          androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+          androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+          androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
+          androidx-core = { group = "androidx.test", name = "core", version = "1.6.1" }
+          androidx-junit = { group = "androidx.test.ext", name = "junit", version = "1.2.1" }
+          androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version = "3.6.1" }
+          androidx-runner = { group = "androidx.test", name = "runner", version = "1.6.2" }
+          androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+          androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+          androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+          androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+          androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+          androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+          androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+          androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+          androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
+          androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+          androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version = "1.1.0-alpha06" }
+          androidx-credentials = { group = "androidx.credentials", name = "credentials", version = "1.3.0" }
+          androidx-credentials-play-services = { group = "androidx.credentials", name = "credentials-play-services-auth", version = "1.3.0" }
+          coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+          firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
+          firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
+          firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+          firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+          firebase-appcheck-recaptcha = { group = "com.google.firebase", name = "firebase-appcheck-recaptcha" }
+          googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version = "1.1.1" }
+          kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+          kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+          kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+          okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+          logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+          retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+          converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "retrofit" }
+          moshi-kotlin = { group = "com.squareup.moshi", name = "moshi-kotlin", version.ref = "moshi" }
+          moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshi" }
+          junit = { group = "junit", name = "junit", version = "4.13.2" }
+          robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+          roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+          roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+          roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
+
+          [plugins]
+          android-application = { id = "com.android.application", version.ref = "agp" }
+          kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+          google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+          roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
+          secrets = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version.ref = "secrets" }
+          google-services = { id = "com.google.gms.google-services", version.ref = "agp" }
+          EOF
+
+          # Create gradle wrapper properties
+          mkdir -p "$PROJECT_ROOT/gradle/wrapper"
+          cat > "$PROJECT_ROOT/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.9-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          # Create gradlew script
+          curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradlew -o "$PROJECT_ROOT/gradlew"
+          chmod +x "$PROJECT_ROOT/gradlew"
+
+          # Copy gradle-wrapper.jar
+          mkdir -p "$PROJECT_ROOT/gradle/wrapper"
+          curl -sL "https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar" \
+            -o "$PROJECT_ROOT/gradle/wrapper/gradle-wrapper.jar"
+
+          # Create .env file from .env.example (blank values)
+          if [ -f "$PROJECT_ROOT/.env.example" ]; then
+            sed 's/=.*/=/' "$PROJECT_ROOT/.env.example" > "$PROJECT_ROOT/.env"
+          else
+            touch "$PROJECT_ROOT/.env"
+          fi
+
+          # Create a dummy google-services.json (warnings only, not error)
+          cat > "$PROJECT_ROOT/app/google-services.json" << 'EOF'
+          {
+            "project_info": { "project_number": "000000000000", "project_id": "dummy-project", "storage_bucket": "dummy-project.appspot.com" },
+            "client": [{
+              "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": { "package_name": "com.aistudio.smartvideocutter.wyqztm" } },
+              "oauth_client": [], "api_key": [{ "current_key": "dummy_api_key" }], "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+            }],
+            "configuration_version": "1"
+          }
+          EOF
+
+          echo "PROJECT_ROOT=$PROJECT_ROOT" >> $GITHUB_ENV
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Debug APK
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartVideoCutter-debug
+          path: ${{ env.PROJECT_ROOT }}/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
